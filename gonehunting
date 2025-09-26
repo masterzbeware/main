@@ -3,8 +3,8 @@ local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 
 local Window = Library:CreateWindow({
-    Title = "Hunting Hub",
-    Footer = "v1.0.0",
+    Title = "Hunting & Fishing Hub",
+    Footer = "v2.0",
     Icon = 0,
     NotifySide = "Right",
     ShowCustomCursor = true,
@@ -18,6 +18,7 @@ local Tabs = {
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 
+-- Hunting remotes
 local CaptureAnimal        = RemoteEvents:WaitForChild("CaptureAnimal")
 local MinigameFinished     = RemoteEvents:WaitForChild("MinigameFinished")
 local RunAnimalHitParticle = RemoteEvents:WaitForChild("RunAnimalHitParticle")
@@ -26,70 +27,94 @@ local FireGun              = RemoteEvents:WaitForChild("FireGun")
 local ToggleItemLock       = RemoteEvents:WaitForChild("ToggleItemLock")
 local SellItem             = RemoteEvents:WaitForChild("SellItem")
 
+-- Fishing remotes
+local CleanFishingLine     = RemoteEvents:WaitForChild("CleanFishingLine")
+local FishCaught           = RemoteEvents:WaitForChild("FishCaught")
+local RunFishingBubbles    = RemoteEvents:WaitForChild("RunFishingBubbles")
+local RunFishingLine       = RemoteEvents:WaitForChild("RunFishingLine")
+
 local AnimalsFolder = game.Workspace:WaitForChild("Animals")
 local RunService    = game:GetService("RunService")
 
 -- ✅ Config
 local shootDir = Vector3.new(-0.61, 0.08, 0.78)
 
-local mutationList = {
-    "None","Grassbound","Albino","Umbra","Radioactive",
-    "Ghostly","Wyrmblooded","Ashen","Dimensional"
-}
-
 -- ✅ Toggle states
-local autoHunt = false
-local autoSell = false
-local autoLock = false
+local autoHunt    = false
+local autoSell    = false
+local autoLock    = false
+local autoFishing = false
 
 -- ✅ Hunting Function
 local function HuntTarget(model)
+    if not autoHunt then return end
+
     local targetId = model.Name
-    local weight   = model:GetAttribute("Weight") or 0
     local mutation = model:GetAttribute("Mutation") or "None"
+    local pos = model.PrimaryPart and model.PrimaryPart.Position or Vector3.zero
 
-    if not autoHunt then return end -- kalau toggle OFF, keluar
+    -- tembak
+    FireGun:FireServer(pos, shootDir, targetId)
+    task.wait(0.2)
 
-    if weight > 20 or mutation ~= "None" then
-        local pos = model.PrimaryPart and model.PrimaryPart.Position or Vector3.zero
+    RunAnimalHitParticle:FireServer("Perfect", targetId)
+    LogCustomEvent:FireServer("HitPerfect")
+    task.wait(0.2)
 
-        -- tembak
-        FireGun:FireServer(pos, shootDir, targetId)
-        task.wait(0.2)
+    MinigameFinished:FireServer(true)
+    task.wait(0.2)
 
-        RunAnimalHitParticle:FireServer("Perfect", targetId)
-        LogCustomEvent:FireServer("HitPerfect")
-        task.wait(0.2)
+    CaptureAnimal:FireServer(tonumber(targetId))
+    print("[AutoHunt] Tangkap:", targetId, "Mutation:", mutation)
 
-        MinigameFinished:FireServer(true)
-        task.wait(0.2)
+    task.wait(0.5) -- tunggu masuk inventory
 
-        CaptureAnimal:FireServer(tonumber(targetId))
-        print("[AutoHunt] Tangkap:", targetId, "Weight:", weight, "Mutation:", mutation)
-
-        -- tunggu item masuk inventory
-        task.wait(0.5)
-
-        if mutation ~= "None" and autoLock then
-            ToggleItemLock:FireServer(targetId)
-            print("[AutoHunt] Mutation "..mutation.." → AUTO LOCK ✅")
-        elseif mutation == "None" and autoSell then
-            SellItem:FireServer("All")
-            print("[AutoHunt] Mutation None → AUTO SELL 💰")
-        end
-    else
-        print("[AutoHunt] Skip target:", targetId, "(Weight:", weight, ", Mutation:", mutation..")")
+    if mutation ~= "None" and autoLock then
+        ToggleItemLock:FireServer(targetId)
+        print("[AutoHunt] Mutation "..mutation.." → AUTO LOCK ✅")
+    elseif mutation == "None" and autoSell then
+        SellItem:FireServer("All")
+        print("[AutoHunt] Mutation None → AUTO SELL 💰")
     end
 end
 
--- ✅ Loop pakai Heartbeat
+-- ✅ Auto Fishing Function
+local function AutoFishRound()
+    if not autoFishing then return end
+
+    RunFishingBubbles:FireServer()
+    task.wait(0.3)
+
+    RunFishingLine:FireServer(0.65)
+    task.wait(0.5)
+
+    FishCaught:FireServer()
+    task.wait(0.2)
+
+    CleanFishingLine:FireServer()
+    print("[AutoFishing] Selesai 1x mancing")
+end
+
+-- ✅ Loop Hunting (pakai Heartbeat)
 RunService.Heartbeat:Connect(function()
     if autoHunt then
         for _, model in ipairs(AnimalsFolder:GetChildren()) do
             if model:IsA("Model") then
                 HuntTarget(model)
-                task.wait(0.5) -- delay kecil antar hewan (biar aman)
+                task.wait(0.5) -- biar ga terlalu spam
             end
+        end
+    end
+end)
+
+-- ✅ Loop Fishing (pakai thread sendiri)
+task.spawn(function()
+    while true do
+        if autoFishing then
+            AutoFishRound()
+            task.wait(1) -- delay antar mancing
+        else
+            task.wait(0.5)
         end
     end
 end)
@@ -121,5 +146,14 @@ GroupBox:AddToggle("AutoLockToggle", {
     Callback = function(v)
         autoLock = v
         Library:Notify("Auto Lock: "..tostring(v), 3)
+    end
+})
+
+GroupBox:AddToggle("AutoFishingToggle", {
+    Text = "Auto Fishing",
+    Default = false,
+    Callback = function(v)
+        autoFishing = v
+        Library:Notify("Auto Fishing: "..tostring(v), 3)
     end
 })
