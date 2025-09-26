@@ -1,0 +1,125 @@
+-- ✅ Obsidian UI Setup
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+
+local Window = Library:CreateWindow({
+    Title = "Hunting Hub",
+    Footer = "v1.0.0",
+    Icon = 0,
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+})
+
+local Tabs = {
+    Main = Window:AddTab("Main", "sword")
+}
+
+-- ✅ Services & Remotes
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
+
+local CaptureAnimal        = RemoteEvents:WaitForChild("CaptureAnimal")
+local MinigameFinished     = RemoteEvents:WaitForChild("MinigameFinished")
+local RunAnimalHitParticle = RemoteEvents:WaitForChild("RunAnimalHitParticle")
+local LogCustomEvent       = RemoteEvents:WaitForChild("LogCustomEvent")
+local FireGun              = RemoteEvents:WaitForChild("FireGun")
+local ToggleItemLock       = RemoteEvents:WaitForChild("ToggleItemLock")
+local SellItem             = RemoteEvents:WaitForChild("SellItem")
+
+local AnimalsFolder = game.Workspace:WaitForChild("Animals")
+local RunService    = game:GetService("RunService")
+
+-- ✅ Config
+local shootDir = Vector3.new(-0.61, 0.08, 0.78)
+
+local mutationList = {
+    "None","Grassbound","Albino","Umbra","Radioactive",
+    "Ghostly","Wyrmblooded","Ashen","Dimensional"
+}
+
+-- ✅ Toggle states
+local autoHunt = false
+local autoSell = false
+local autoLock = false
+
+-- ✅ Hunting Function
+local function HuntTarget(model)
+    local targetId = model.Name
+    local weight   = model:GetAttribute("Weight") or 0
+    local mutation = model:GetAttribute("Mutation") or "None"
+
+    if not autoHunt then return end -- kalau toggle OFF, keluar
+
+    if weight > 20 or mutation ~= "None" then
+        local pos = model.PrimaryPart and model.PrimaryPart.Position or Vector3.zero
+
+        -- tembak
+        FireGun:FireServer(pos, shootDir, targetId)
+        task.wait(0.2)
+
+        RunAnimalHitParticle:FireServer("Perfect", targetId)
+        LogCustomEvent:FireServer("HitPerfect")
+        task.wait(0.2)
+
+        MinigameFinished:FireServer(true)
+        task.wait(0.2)
+
+        CaptureAnimal:FireServer(tonumber(targetId))
+        print("[AutoHunt] Tangkap:", targetId, "Weight:", weight, "Mutation:", mutation)
+
+        -- tunggu item masuk inventory
+        task.wait(0.5)
+
+        if mutation ~= "None" and autoLock then
+            ToggleItemLock:FireServer(targetId)
+            print("[AutoHunt] Mutation "..mutation.." → AUTO LOCK ✅")
+        elseif mutation == "None" and autoSell then
+            SellItem:FireServer("All")
+            print("[AutoHunt] Mutation None → AUTO SELL 💰")
+        end
+    else
+        print("[AutoHunt] Skip target:", targetId, "(Weight:", weight, ", Mutation:", mutation..")")
+    end
+end
+
+-- ✅ Loop pakai Heartbeat
+RunService.Heartbeat:Connect(function()
+    if autoHunt then
+        for _, model in ipairs(AnimalsFolder:GetChildren()) do
+            if model:IsA("Model") then
+                HuntTarget(model)
+                task.wait(0.5) -- delay kecil antar hewan (biar aman)
+            end
+        end
+    end
+end)
+
+-- ✅ UI
+local GroupBox = Tabs.Main:AddLeftGroupbox("Automation")
+
+GroupBox:AddToggle("AutoHuntToggle", {
+    Text = "Auto Hunt",
+    Default = false,
+    Callback = function(v)
+        autoHunt = v
+        Library:Notify("Auto Hunt: "..tostring(v), 3)
+    end
+})
+
+GroupBox:AddToggle("AutoSellToggle", {
+    Text = "Auto Sell (Mutation None)",
+    Default = false,
+    Callback = function(v)
+        autoSell = v
+        Library:Notify("Auto Sell: "..tostring(v), 3)
+    end
+})
+
+GroupBox:AddToggle("AutoLockToggle", {
+    Text = "Auto Favorite / Lock Mutation",
+    Default = false,
+    Callback = function(v)
+        autoLock = v
+        Library:Notify("Auto Lock: "..tostring(v), 3)
+    end
+})
