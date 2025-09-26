@@ -4,9 +4,8 @@ local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 
 local Window = Library:CreateWindow({
     Title = "Hunting & Fishing Hub",
-    Footer = "v2.0",
+    Footer = "v4.0",
     Icon = 0,
-    NotifySide = "Right",
     ShowCustomCursor = true,
 })
 
@@ -18,7 +17,7 @@ local Tabs = {
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 
--- Hunting remotes
+-- Hunting
 local CaptureAnimal        = RemoteEvents:WaitForChild("CaptureAnimal")
 local MinigameFinished     = RemoteEvents:WaitForChild("MinigameFinished")
 local RunAnimalHitParticle = RemoteEvents:WaitForChild("RunAnimalHitParticle")
@@ -27,7 +26,7 @@ local FireGun              = RemoteEvents:WaitForChild("FireGun")
 local ToggleItemLock       = RemoteEvents:WaitForChild("ToggleItemLock")
 local SellItem             = RemoteEvents:WaitForChild("SellItem")
 
--- Fishing remotes
+-- Fishing
 local CleanFishingLine     = RemoteEvents:WaitForChild("CleanFishingLine")
 local FishCaught           = RemoteEvents:WaitForChild("FishCaught")
 local RunFishingBubbles    = RemoteEvents:WaitForChild("RunFishingBubbles")
@@ -41,8 +40,8 @@ local shootDir = Vector3.new(-0.61, 0.08, 0.78)
 
 -- ✅ Toggle states
 local autoHunt    = false
-local autoSell    = false
 local autoLock    = false
+local autoSell    = false
 local autoFishing = false
 
 -- ✅ Hunting Function
@@ -67,14 +66,18 @@ local function HuntTarget(model)
     CaptureAnimal:FireServer(tonumber(targetId))
     print("[AutoHunt] Tangkap:", targetId, "Mutation:", mutation)
 
-    task.wait(0.5) -- tunggu masuk inventory
+    task.wait(0.5) -- tunggu item masuk inventory
 
-    if mutation ~= "None" and autoLock then
-        ToggleItemLock:FireServer(targetId)
-        print("[AutoHunt] Mutation "..mutation.." → AUTO LOCK ✅")
-    elseif mutation == "None" and autoSell then
-        SellItem:FireServer("All")
-        print("[AutoHunt] Mutation None → AUTO SELL 💰")
+    if mutation ~= "None" then
+        if autoLock then
+            ToggleItemLock:FireServer(targetId)
+            print("[AutoHunt] Mutation "..mutation.." → AUTO LOCK ✅")
+        end
+    else
+        if autoSell then
+            SellItem:FireServer("All")
+            print("[AutoHunt] Mutation None → AUTO SELL 💰")
+        end
     end
 end
 
@@ -95,24 +98,24 @@ local function AutoFishRound()
     print("[AutoFishing] Selesai 1x mancing")
 end
 
--- ✅ Loop Hunting (pakai Heartbeat)
+-- ✅ Loop Hunting
 RunService.Heartbeat:Connect(function()
     if autoHunt then
         for _, model in ipairs(AnimalsFolder:GetChildren()) do
             if model:IsA("Model") then
                 HuntTarget(model)
-                task.wait(0.5) -- biar ga terlalu spam
+                task.wait(0.5)
             end
         end
     end
 end)
 
--- ✅ Loop Fishing (pakai thread sendiri)
+-- ✅ Loop Fishing
 task.spawn(function()
     while true do
         if autoFishing then
             AutoFishRound()
-            task.wait(1) -- delay antar mancing
+            task.wait(1)
         else
             task.wait(0.5)
         end
@@ -123,11 +126,20 @@ end)
 local GroupBox = Tabs.Main:AddLeftGroupbox("Automation")
 
 GroupBox:AddToggle("AutoHuntToggle", {
-    Text = "Auto Hunt",
+    Text = "Auto Hunt (Tangkap Semua)",
     Default = false,
     Callback = function(v)
         autoHunt = v
         Library:Notify("Auto Hunt: "..tostring(v), 3)
+    end
+})
+
+GroupBox:AddToggle("AutoLockToggle", {
+    Text = "Auto Lock Mutation",
+    Default = false,
+    Callback = function(v)
+        autoLock = v
+        Library:Notify("Auto Lock: "..tostring(v), 3)
     end
 })
 
@@ -137,15 +149,6 @@ GroupBox:AddToggle("AutoSellToggle", {
     Callback = function(v)
         autoSell = v
         Library:Notify("Auto Sell: "..tostring(v), 3)
-    end
-})
-
-GroupBox:AddToggle("AutoLockToggle", {
-    Text = "Auto Favorite / Lock Mutation",
-    Default = false,
-    Callback = function(v)
-        autoLock = v
-        Library:Notify("Auto Lock: "..tostring(v), 3)
     end
 })
 
